@@ -61,7 +61,7 @@ We evaluated the Qwen-Audio's abilities on 12 standard benchmarks as follows:
 <p>
 
 
-The below is the overal performance：
+The below is the overall performance：
 <p align="center">
     <img src="assets/radar_new.png" width="800"/>
 <p>
@@ -78,7 +78,7 @@ The details of evaluation are as follows:
   </tr>
 <tr>
     <th>dev-clean</th>
-    <th>dev-othoer</th>
+    <th>dev-other</th>
     <th>test-clean</th>
     <th>test-other</th>
   </tr>
