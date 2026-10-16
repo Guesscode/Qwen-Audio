@@ -1292,7 +1292,15 @@ class QWenLMHeadModel(QWenPreTrainedModel):
                 logits_processor.append(stop_words_logits_processor)
         input_ids = torch.tensor([context_tokens]).to(self.device)
 
-        from transformers_stream_generator.main import NewGenerationMixin, StreamGenerationConfig
+        # Imported inside try/except so transformers' `check_imports` does not make this optional
+        # dependency (incompatible with recent transformers releases) a requirement for loading the model.
+        try:
+            from transformers_stream_generator.main import NewGenerationMixin, StreamGenerationConfig
+        except ImportError as e:
+            raise ImportError(
+                "chat_stream() requires a `transformers_stream_generator` that is compatible with your "
+                "transformers version: `pip install transformers_stream_generator==0.0.4 transformers==4.32.0`."
+            ) from e
         self.__class__.generate_stream = NewGenerationMixin.generate
         self.__class__.sample_stream = NewGenerationMixin.sample_stream
         stream_config = StreamGenerationConfig(**generation_config.to_dict(), do_stream=True)
