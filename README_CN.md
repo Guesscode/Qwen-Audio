@@ -77,7 +77,7 @@
   </tr>
 <tr>
     <th>dev-clean</th>
-    <th>dev-othoer</th>
+    <th>dev-other</th>
     <th>test-clean</th>
     <th>test-other</th>
   </tr>
