@@ -144,6 +144,19 @@ def dequantize_cache_torch(qdata, scale, zero):
     data = scale * (qdata - zero)
     return data
 
+
+def _to_legacy_past_key_values(past_key_values):
+    # Since transformers 4.36, `generate()` may pass a `transformers.Cache` object instead of None
+    # on the first step. This model only understands its own tuple-format cache.
+    if past_key_values is None or isinstance(past_key_values, (tuple, list)):
+        return past_key_values
+    if past_key_values.get_seq_length() == 0:
+        return None
+    raise ValueError(
+        f"QWen only supports tuple-format `past_key_values`, got {type(past_key_values).__name__}."
+    )
+
+
 class FlashSelfAttention(torch.nn.Module):
     def __init__(
         self,
@@ -757,6 +770,7 @@ class QWenModel(QWenPreTrainedModel):
         return_dict: Optional[bool] = None,
         audio_info: Dict = None
     ):
+        past_key_values = _to_legacy_past_key_values(past_key_values)
         if past_key_values is None and torch.any(input_ids == self.config.audio['audio_start_id']):
             bos_pos = torch.where(input_ids == self.config.audio['audio_start_id'])
             eos_pos = torch.where(input_ids == self.config.audio['audio_start_id'] + 1)
@@ -958,6 +972,10 @@ class QWenLMHeadModel(QWenPreTrainedModel):
     _keys_to_ignore_on_load_missing = [r"h\.\d+\.attn\.rotary_emb\.inv_freq"]
     _keys_to_ignore_on_load_unexpected = [r"h\.\d+\.attn\.masked_bias"]
 
+    @classmethod
+    def _supports_default_dynamic_cache(cls) -> bool:
+        return False
+
     def __init__(self, config):
         super().__init__(config)
         assert (
@@ -1048,6 +1066,7 @@ class QWenLMHeadModel(QWenPreTrainedModel):
         self, input_ids, past_key_values=None, inputs_embeds=None, **kwargs
     ):
         audio_info = kwargs.pop("audio_info", None)
+        past_key_values = _to_legacy_past_key_values(past_key_values)
         token_type_ids = kwargs.get("token_type_ids", None)
         if past_key_values:
             input_ids = input_ids[:, -1].unsqueeze(-1)
@@ -1273,7 +1292,15 @@ class QWenLMHeadModel(QWenPreTrainedModel):
                 logits_processor.append(stop_words_logits_processor)
         input_ids = torch.tensor([context_tokens]).to(self.device)
 
-        from transformers_stream_generator.main import NewGenerationMixin, StreamGenerationConfig
+        # Imported inside try/except so transformers' `check_imports` does not make this optional
+        # dependency (incompatible with recent transformers releases) a requirement for loading the model.
+        try:
+            from transformers_stream_generator.main import NewGenerationMixin, StreamGenerationConfig
+        except ImportError as e:
+            raise ImportError(
+                "chat_stream() requires a `transformers_stream_generator` that is compatible with your "
+                "transformers version: `pip install transformers_stream_generator==0.0.4 transformers==4.32.0`."
+            ) from e
         self.__class__.generate_stream = NewGenerationMixin.generate
         self.__class__.sample_stream = NewGenerationMixin.sample_stream
         stream_config = StreamGenerationConfig(**generation_config.to_dict(), do_stream=True)
